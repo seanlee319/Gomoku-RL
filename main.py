@@ -6,13 +6,13 @@ from ai import QLearningAI
 from visualization import GomokuVisualization
 
 # Constants
-INFO_WIDTH = 600
+INFO_WIDTH = 600  # Width of the info panel
 
 def main():
     # Initialize game components
     env = GomokuEnvironment()
-    black_ai = QLearningAI(1)
-    white_ai = QLearningAI(2)
+    black_ai = QLearningAI(1)  # Player 1 (Black)
+    white_ai = QLearningAI(2)  # Player 2 (White)
     visualizer = GomokuVisualization(env, black_ai, white_ai)
     
     # Set up the display
@@ -22,8 +22,8 @@ def main():
     pygame.display.set_caption('Gomoku AI vs AI with Learning Visualization')
     
     # Game variables
-    ai_vs_ai = True
-    auto_play_delay = 0.1  # seconds between AI moves
+    ai_vs_ai = True  # Start in AI vs AI mode
+    auto_play_delay = 0.01  # seconds between AI moves
     last_ai_move_time = 0
     clock = pygame.time.Clock()
     
@@ -36,7 +36,7 @@ def main():
                 sys.exit()
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
-                    ai_vs_ai = not ai_vs_ai
+                    ai_vs_ai = not ai_vs_ai  # Toggle AI vs AI mode
                 elif event.key == pygame.K_ESCAPE:
                     pygame.quit()
                     sys.exit()
@@ -51,18 +51,23 @@ def main():
                             if env.winner == 1:
                                 black_ai.wins += 1
                                 white_ai.losses += 1
-                                black_ai.learn(env.board, 1.0)
-                                white_ai.learn(env.board, -1.0)
+                                black_ai.learn(env.board, 1.0)  # Black wins
+                                white_ai.learn(env.board, 0.0)  # White loses
                             elif env.winner == 2:
                                 white_ai.wins += 1
                                 black_ai.losses += 1
-                                white_ai.learn(env.board, 1.0)
-                                black_ai.learn(env.board, -1.0)
+                                white_ai.learn(env.board, 1.0)  # White wins
+                                black_ai.learn(env.board, 0.0)  # Black loses
                             else:
                                 black_ai.draws += 1
                                 white_ai.draws += 1
-                                black_ai.learn(env.board, 0.1)
-                                white_ai.learn(env.board, 0.1)
+                                black_ai.learn(env.board, 0.5)  # Draw
+                                white_ai.learn(env.board, 0.5)  # Draw
+                            # Update stats and reset
+                            visualizer.update_stats(env.winner, env.move_count)
+                            env.reset()
+                            black_ai.reset()
+                            white_ai.reset()
                 elif env.game_over:
                     env.reset()
                     black_ai.reset()
@@ -73,8 +78,10 @@ def main():
         if ai_vs_ai and not env.game_over and current_time - last_ai_move_time > auto_play_delay:
             if env.current_player == 1:
                 ai = black_ai
+                opponent_ai = white_ai
             else:
                 ai = white_ai
+                opponent_ai = black_ai
             
             state_key = ai.get_state_key(env.board)
             ai.last_state = state_key
@@ -87,27 +94,26 @@ def main():
                     if env.winner == 1:
                         black_ai.wins += 1
                         white_ai.losses += 1
-                        black_ai.learn(env.board, 1.0)
-                        white_ai.learn(env.board, -1.0)
+                        black_ai.learn(env.board, 1.0)  # Black wins
+                        white_ai.learn(env.board, 0.0)  # White loses
                     elif env.winner == 2:
                         white_ai.wins += 1
                         black_ai.losses += 1
-                        white_ai.learn(env.board, 1.0)
-                        black_ai.learn(env.board, -1.0)
+                        white_ai.learn(env.board, 1.0)  # White wins
+                        black_ai.learn(env.board, 0.0)  # Black loses
                     else:
                         black_ai.draws += 1
                         white_ai.draws += 1
-                        black_ai.learn(env.board, 0.1)
-                        white_ai.learn(env.board, 0.1)
+                        black_ai.learn(env.board, 0.5)  # Draw
+                        white_ai.learn(env.board, 0.5)  # Draw
+                    # Update stats and reset
+                    visualizer.update_stats(env.winner, env.move_count)
+                    env.reset()
+                    black_ai.reset()
+                    white_ai.reset()
                 else:
-                    ai.learn(env.board, reward)
+                    ai.learn(env.board, reward)  # Learn from intermediate move
             
-            last_ai_move_time = current_time
-        elif ai_vs_ai and env.game_over and current_time - last_ai_move_time > auto_play_delay * 2:
-            visualizer.update_stats(env.winner, env.move_count)
-            env.reset()
-            black_ai.reset()
-            white_ai.reset()
             last_ai_move_time = current_time
         
         # Draw everything
@@ -128,7 +134,7 @@ def main():
         screen.blit(status_surface, (env.MARGIN, 10))
         
         pygame.display.flip()
-        clock.tick(60)
+        clock.tick(60)  # Cap at 60 FPS
 
 if __name__ == "__main__":
     main()

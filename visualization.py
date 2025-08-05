@@ -1,7 +1,7 @@
 import pygame
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_agg import FigureCanvasAgg
-import numpy as np 
+import numpy as np
 
 class GomokuVisualization:
     def __init__(self, env, black_ai, white_ai):
@@ -19,11 +19,10 @@ class GomokuVisualization:
         self.exploration_rates = []
         self.game_numbers = []
         self.game_lengths = []
-        self.black_final_q_values = []
-        self.white_final_q_values = []
     
     def draw_info_panel(self, screen, info_width):
-        # Draw info panel background
+        """Draw the right-side panel with learning statistics."""
+        # Panel background
         pygame.draw.rect(screen, (240, 240, 240), (self.env.BOARD_WIDTH, 0, info_width, self.env.BOARD_HEIGHT))
         
         # Title
@@ -77,11 +76,11 @@ class GomokuVisualization:
         max_lines = max(len(left_stats), len(middle_stats), len(right_stats))
         graph_height = (self.env.BOARD_HEIGHT - stats_y - 30 - max_lines*line_height) // 2
         self.draw_win_graph(screen, stats_y + max_lines*line_height + 20, info_width - 40, graph_height)
-        self.draw_q_graph(screen, stats_y + max_lines*line_height + 30 + graph_height, info_width - 40, graph_height)
-    
+        self.draw_reward_graph(screen, stats_y + max_lines*line_height + 30 + graph_height, info_width - 40, graph_height)
+
     def draw_win_graph(self, screen, y_pos, width, height):
+        """Draw the cumulative wins graph."""
         try:
-            # Create figure
             fig = plt.figure(figsize=(width/100, height/100), dpi=100)
             ax = fig.add_subplot(111)
 
@@ -95,7 +94,7 @@ class GomokuVisualization:
             ax.set_title('Cumulative Wins Over Games', fontsize=10)
             ax.set_xlabel('Game Number', fontsize=8)
             ax.set_ylabel('Count', fontsize=8)
-            ax.set_xlim(0, max(1, len(self.black_win_counts)-1))  # Start x-axis at 0
+            ax.set_xlim(0, max(1, len(self.black_win_counts)-1))
             ax.set_ylim(0, max(1, max(self.black_win_counts + self.white_win_counts + self.draw_counts)))
             ax.tick_params(axis='both', which='major', labelsize=8)
             ax.legend(loc='upper left', fontsize=8)
@@ -117,37 +116,43 @@ class GomokuVisualization:
         except Exception as e:
             print(f"Error drawing win graph: {e}")
     
-    def draw_q_graph(self, screen, y_pos, width, height):
+    def draw_reward_graph(self, screen, y_pos, width, height):
+        """Draw the final rewards per game graph for both AIs."""
         try:
-            # Create figure
             fig = plt.figure(figsize=(width/100, height/100), dpi=100)
             ax = fig.add_subplot(111)
 
-            # Plot Q-values starting from game 0
-            if len(self.black_final_q_values) > 0:
-                games = range(0, len(self.black_final_q_values))
-                ax.plot(games, self.black_final_q_values, 
-                       label='Black Q', color='black', linewidth=1.5, marker='o', markersize=3)
+            # Plot final rewards from both AIs if they have data
+            if hasattr(self.black_ai, 'final_rewards') and self.black_ai.final_rewards:
+                games = range(1, len(self.black_ai.final_rewards)+1)
+                ax.plot(games, self.black_ai.final_rewards, 
+                    label='Black Rewards', color='black', linewidth=1.5, marker='o', markersize=3)
 
-            if len(self.white_final_q_values) > 0:
-                games = range(0, len(self.white_final_q_values))
-                ax.plot(games, self.white_final_q_values, 
-                       label='White Q', color='blue', linewidth=1.5, marker='o', markersize=3)
+            if hasattr(self.white_ai, 'final_rewards') and self.white_ai.final_rewards:
+                games = range(1, len(self.white_ai.final_rewards)+1)
+                ax.plot(games, self.white_ai.final_rewards, 
+                    label='White Rewards', color='blue', linewidth=1.5, marker='o', markersize=3)
 
             # Formatting
-            ax.set_title('Final Q-values per Game', fontsize=10)
+            ax.set_title('Final Rewards per Game', fontsize=10)
             ax.set_xlabel('Game Number', fontsize=8)
-            ax.set_ylabel('Q-value', fontsize=8)
-            ax.set_xlim(0, max(1, max(len(self.black_final_q_values), len(self.white_final_q_values))-1)) # Start x-axis at 0
+            ax.set_ylabel('Reward', fontsize=8)
+            
+            # Set appropriate axis limits
+            black_r = getattr(self.black_ai, 'final_rewards', [])
+            white_r = getattr(self.white_ai, 'final_rewards', [])
+            all_r = black_r + white_r
+            
+            if all_r:
+                ax.set_xlim(1, max(len(black_r), len(white_r)))
+                ax.set_ylim(min(all_r) - 0.2, max(all_r) + 0.2)
+            else:
+                ax.set_xlim(0, 10)
+                ax.set_ylim(0, 1.5)
+                
             ax.tick_params(axis='both', which='major', labelsize=8)
             ax.legend(loc='upper right', fontsize=8)
             ax.grid(True, linestyle='--', alpha=0.4)
-            
-            if len(self.black_final_q_values) > 0 or len(self.white_final_q_values) > 0:
-                all_q_values = self.black_final_q_values + self.white_final_q_values
-                min_q = min(all_q_values) if all_q_values else -0.1
-                max_q = max(all_q_values) if all_q_values else 0.1
-                ax.set_ylim(min_q - 0.1, max_q + 0.1)
 
             plt.tight_layout(pad=1)
 
@@ -163,9 +168,10 @@ class GomokuVisualization:
 
             plt.close(fig)
         except Exception as e:
-            print(f"Error drawing Q graph: {e}")
+            print(f"Error drawing reward graph: {e}")
         
     def update_stats(self, game_result, move_count):
+        """Update statistics after each game."""
         self.games_played += 1
         self.game_lengths.append(move_count)
         self.game_numbers.append(self.games_played)
@@ -180,18 +186,3 @@ class GomokuVisualization:
         self.draw_counts.append(prev_draw + (1 if game_result is None else 0))
         
         self.exploration_rates.append((self.black_ai.exploration_rate, self.white_ai.exploration_rate))
-        
-        # Store the maximum Q-value encountered during the game
-        if hasattr(self.black_ai, 'q_values') and self.black_ai.q_values:
-            self.black_final_q_values.append(max(self.black_ai.q_values))
-        else:
-            self.black_final_q_values.append(0)
-            
-        if hasattr(self.white_ai, 'q_values') and self.white_ai.q_values:
-            self.white_final_q_values.append(max(self.white_ai.q_values))
-        else:
-            self.white_final_q_values.append(0)
-        
-        # Clear move-by-move values
-        self.black_ai.q_values = []
-        self.white_ai.q_values = []
