@@ -9,8 +9,8 @@ class GomokuEnvironment:
         self.GRID_SIZE = 40
         self.STONE_RADIUS = 15
         self.MARGIN = 40
-        self.BOARD_WIDTH = self.BOARD_SIZE * self.GRID_SIZE + 2 * self.MARGIN
-        self.BOARD_HEIGHT = self.BOARD_SIZE * self.GRID_SIZE + 2 * self.MARGIN
+        self.BOARD_WIDTH = self.BOARD_SIZE * self.GRID_SIZE + self.MARGIN
+        self.BOARD_HEIGHT = self.BOARD_SIZE * self.GRID_SIZE + self.MARGIN
         self.BLACK = (0, 0, 0)
         self.WHITE = (255, 255, 255)
         self.BROWN = (210, 180, 140)
@@ -89,6 +89,8 @@ class GomokuEnvironment:
         return moves
     
     def render(self, screen):
+        # Fill the entire screen with white first
+        screen.fill((255, 255, 255))
         # Draw game board background
         pygame.draw.rect(screen, self.BROWN, (0, 0, self.BOARD_WIDTH, self.BOARD_HEIGHT))
         

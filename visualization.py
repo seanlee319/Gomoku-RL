@@ -8,102 +8,190 @@ class GomokuVisualization:
         self.env = env
         self.black_ai = black_ai
         self.white_ai = white_ai
-        self.font = pygame.font.SysFont('Arial', 24)
-        self.large_font = pygame.font.SysFont('Arial', 36)
+        self.font = pygame.font.SysFont('Arial', 20)
+        self.large_font = pygame.font.SysFont('Arial', 24)
         
         # Tracking variables
         self.games_played = 0
-        self.black_wins = []
-        self.white_wins = []
-        self.draws = []
+        self.black_win_counts = [0]  # Start with 0 for game 0
+        self.white_win_counts = [0]  # Start with 0 for game 0
+        self.draw_counts = [0]       # Start with 0 for game 0
         self.exploration_rates = []
         self.game_numbers = []
         self.game_lengths = []
+        self.black_final_q_values = []
+        self.white_final_q_values = []
     
     def draw_info_panel(self, screen, info_width):
         # Draw info panel background
-        pygame.draw.rect(screen, (255, 255, 255), (self.env.BOARD_WIDTH, 0, info_width, self.env.BOARD_HEIGHT))
+        pygame.draw.rect(screen, (240, 240, 240), (self.env.BOARD_WIDTH, 0, info_width, self.env.BOARD_HEIGHT))
         
         # Title
         title = self.large_font.render("Learning Progress", True, (0, 0, 0))
         screen.blit(title, (self.env.BOARD_WIDTH + 20, 20))
         
-        # Game stats
-        stats_y = 80
-        stats = [
-            f"Games Played: {self.games_played}",
-            f"Black Wins: {self.black_ai.wins} ({self.black_ai.wins/self.games_played:.1%})" if self.games_played > 0 else "Black Wins: 0",
-            f"White Wins: {self.white_ai.wins} ({self.white_ai.wins/self.games_played:.1%})" if self.games_played > 0 else "White Wins: 0",
-            f"Draws: {self.black_ai.draws} ({self.black_ai.draws/self.games_played:.1%})" if self.games_played > 0 else "Draws: 0",
-            "",
-            f"Exploration Rates:",
-            f"  Black: {self.black_ai.exploration_rate:.3f}",
-            f"  White: {self.white_ai.exploration_rate:.3f}",
-            "",
-            f"Avg Game Length: {np.mean(self.game_lengths):.1f} moves" if self.game_lengths else ""
+        # Game stats - three column layout
+        stats_y = 70
+        line_height = 22
+        column1_x = self.env.BOARD_WIDTH + 20    # Games and results
+        column2_x = self.env.BOARD_WIDTH + 200   # Exploration rates
+        column3_x = self.env.BOARD_WIDTH + 350   # Avg Length
+        
+        # Left column: Games and results
+        left_stats = [
+            f"Games: {self.games_played}",
+            f"Black Wins: {self.black_ai.wins} ({self.black_ai.wins/max(1, self.games_played):.1%})",
+            f"White Wins: {self.white_ai.wins} ({self.white_ai.wins/max(1, self.games_played):.1%})",
+            f"Draws: {self.black_ai.draws} ({self.black_ai.draws/max(1, self.games_played):.1%})",
         ]
         
-        for stat in stats:
-            text = self.font.render(stat, True, (0, 0, 0))
-            screen.blit(text, (self.env.BOARD_WIDTH + 20, stats_y))
-            stats_y += 30
+        # Middle column: Exploration
+        middle_stats = [
+            f"Exploration:",
+            f"Black: {self.black_ai.exploration_rate:.3f}",
+            f"White: {self.white_ai.exploration_rate:.3f}",
+        ]
         
-        # Draw graphs if we have enough data
-        if self.games_played > 1:
-            self.draw_graphs(screen, stats_y + 20, info_width)
+        # Right column: Avg Length
+        right_stats = [
+            f"Avg Length:",
+            f"{np.mean(self.game_lengths):.1f} moves" if self.game_lengths else "0 moves"
+        ]
+        
+        # Draw left column stats
+        for i, stat in enumerate(left_stats):
+            text = self.font.render(stat, True, (0, 0, 0))
+            screen.blit(text, (column1_x, stats_y + i * line_height))
+        
+        # Draw middle column stats
+        for i, stat in enumerate(middle_stats):
+            text = self.font.render(stat, True, (0, 0, 0))
+            screen.blit(text, (column2_x, stats_y + i * line_height))
+        
+        # Draw right column stats
+        for i, stat in enumerate(right_stats):
+            text = self.font.render(stat, True, (0, 0, 0))
+            screen.blit(text, (column3_x, stats_y + i * line_height))
+        
+        # Draw graphs below all columns
+        max_lines = max(len(left_stats), len(middle_stats), len(right_stats))
+        graph_height = (self.env.BOARD_HEIGHT - stats_y - 30 - max_lines*line_height) // 2
+        self.draw_win_graph(screen, stats_y + max_lines*line_height + 20, info_width - 40, graph_height)
+        self.draw_q_graph(screen, stats_y + max_lines*line_height + 30 + graph_height, info_width - 40, graph_height)
     
-    def draw_graphs(self, screen, y_pos, info_width):
+    def draw_win_graph(self, screen, y_pos, width, height):
         try:
-            # Create matplotlib figures
-            fig1 = plt.figure(figsize=(5.5, 2.5), dpi=80)
-            ax1 = fig1.add_subplot(111)
+            # Create figure
+            fig = plt.figure(figsize=(width/100, height/100), dpi=100)
+            ax = fig.add_subplot(111)
+
+            # Plot cumulative wins starting from game 0
+            games = range(0, len(self.black_win_counts))
+            ax.plot(games, self.black_win_counts, label='Black Wins', color='black', linewidth=1.5)
+            ax.plot(games, self.white_win_counts, label='White Wins', color='blue', linewidth=1.5)
+            ax.plot(games, self.draw_counts, label='Draws', color='gray', linewidth=1.5, linestyle='--')
+
+            # Formatting
+            ax.set_title('Cumulative Wins Over Games', fontsize=10)
+            ax.set_xlabel('Game Number', fontsize=8)
+            ax.set_ylabel('Count', fontsize=8)
+            ax.set_xlim(0, max(1, len(self.black_win_counts)-1))  # Start x-axis at 0
+            ax.set_ylim(0, max(1, max(self.black_win_counts + self.white_win_counts + self.draw_counts)))
+            ax.tick_params(axis='both', which='major', labelsize=8)
+            ax.legend(loc='upper left', fontsize=8)
+            ax.grid(True, linestyle='--', alpha=0.4)
+
+            plt.tight_layout(pad=1)
+
+            # Convert to Pygame surface
+            canvas = FigureCanvasAgg(fig)
+            canvas.draw()
+            renderer = canvas.get_renderer()
+            raw_data = renderer.tostring_argb()
+            size = canvas.get_width_height()
             
-            # Win rate graph
-            ax1.plot(self.game_numbers, self.black_wins, label='Black Wins', color='black')
-            ax1.plot(self.game_numbers, self.white_wins, label='White Wins', color='blue')
-            ax1.plot(self.game_numbers, self.draws, label='Draws', color='gray')
-            ax1.set_title('Win Rates Over Time')
-            ax1.legend(loc='upper left', fontsize='small')
-            
-            # Convert to pygame surface
-            canvas1 = FigureCanvasAgg(fig1)
-            canvas1.draw()
-            renderer1 = canvas1.get_renderer()
-            raw_data1 = renderer1.tostring_argb()
-            size1 = canvas1.get_width_height()
-            
-            # Create graph surface
-            graph_surf = pygame.image.fromstring(raw_data1, size1, "ARGB")
+            graph_surf = pygame.image.fromstring(raw_data, size, "ARGB")
             screen.blit(graph_surf, (self.env.BOARD_WIDTH + 20, y_pos))
-            
-            # Second graph (Q-values)
-            fig2 = plt.figure(figsize=(5.5, 2.5), dpi=80)
-            ax2 = fig2.add_subplot(111)
-            
-            window = min(100, len(self.black_ai.q_values))
-            if window > 10:
-                ax2.plot(self.black_ai.q_values[-window:], label='Black Q-values', color='black')
-                ax2.plot(self.white_ai.q_values[-window:], label='White Q-values', color='blue')
-                ax2.set_title('Recent Move Quality')
-                ax2.legend(loc='upper left', fontsize='small')
-                
-                canvas2 = FigureCanvasAgg(fig2)
-                canvas2.draw()
-                raw_data2 = canvas2.get_renderer().tostring_argb()
-                size2 = canvas2.get_width_height()
-                graph_surf2 = pygame.image.fromstring(raw_data2, size2, "ARGB")
-                screen.blit(graph_surf2, (self.env.BOARD_WIDTH + 20, y_pos + 220))
-            
-            plt.close(fig1)
-            plt.close(fig2)
+
+            plt.close(fig)
         except Exception as e:
-            print(f"Error drawing graphs: {e}")
+            print(f"Error drawing win graph: {e}")
     
+    def draw_q_graph(self, screen, y_pos, width, height):
+        try:
+            # Create figure
+            fig = plt.figure(figsize=(width/100, height/100), dpi=100)
+            ax = fig.add_subplot(111)
+
+            # Plot Q-values starting from game 0
+            if len(self.black_final_q_values) > 0:
+                games = range(0, len(self.black_final_q_values))
+                ax.plot(games, self.black_final_q_values, 
+                       label='Black Q', color='black', linewidth=1.5, marker='o', markersize=3)
+
+            if len(self.white_final_q_values) > 0:
+                games = range(0, len(self.white_final_q_values))
+                ax.plot(games, self.white_final_q_values, 
+                       label='White Q', color='blue', linewidth=1.5, marker='o', markersize=3)
+
+            # Formatting
+            ax.set_title('Final Q-values per Game', fontsize=10)
+            ax.set_xlabel('Game Number', fontsize=8)
+            ax.set_ylabel('Q-value', fontsize=8)
+            ax.set_xlim(0, max(1, max(len(self.black_final_q_values), len(self.white_final_q_values))-1)) # Start x-axis at 0
+            ax.tick_params(axis='both', which='major', labelsize=8)
+            ax.legend(loc='upper right', fontsize=8)
+            ax.grid(True, linestyle='--', alpha=0.4)
+            
+            if len(self.black_final_q_values) > 0 or len(self.white_final_q_values) > 0:
+                all_q_values = self.black_final_q_values + self.white_final_q_values
+                min_q = min(all_q_values) if all_q_values else -0.1
+                max_q = max(all_q_values) if all_q_values else 0.1
+                ax.set_ylim(min_q - 0.1, max_q + 0.1)
+
+            plt.tight_layout(pad=1)
+
+            # Convert to Pygame surface
+            canvas = FigureCanvasAgg(fig)
+            canvas.draw()
+            renderer = canvas.get_renderer()
+            raw_data = renderer.tostring_argb()
+            size = canvas.get_width_height()
+            
+            graph_surf = pygame.image.fromstring(raw_data, size, "ARGB")
+            screen.blit(graph_surf, (self.env.BOARD_WIDTH + 20, y_pos))
+
+            plt.close(fig)
+        except Exception as e:
+            print(f"Error drawing Q graph: {e}")
+        
     def update_stats(self, game_result, move_count):
         self.games_played += 1
-        self.game_numbers.append(self.games_played)
-        self.black_wins.append(self.black_ai.wins)
-        self.white_wins.append(self.white_ai.wins)
-        self.draws.append(self.black_ai.draws)
-        self.exploration_rates.append((self.black_ai.exploration_rate, self.white_ai.exploration_rate))
         self.game_lengths.append(move_count)
+        self.game_numbers.append(self.games_played)
+        
+        # Update cumulative win counts
+        prev_black = self.black_win_counts[-1]
+        prev_white = self.white_win_counts[-1]
+        prev_draw = self.draw_counts[-1]
+        
+        self.black_win_counts.append(prev_black + (1 if game_result == 1 else 0))
+        self.white_win_counts.append(prev_white + (1 if game_result == 2 else 0))
+        self.draw_counts.append(prev_draw + (1 if game_result is None else 0))
+        
+        self.exploration_rates.append((self.black_ai.exploration_rate, self.white_ai.exploration_rate))
+        
+        # Store the maximum Q-value encountered during the game
+        if hasattr(self.black_ai, 'q_values') and self.black_ai.q_values:
+            self.black_final_q_values.append(max(self.black_ai.q_values))
+        else:
+            self.black_final_q_values.append(0)
+            
+        if hasattr(self.white_ai, 'q_values') and self.white_ai.q_values:
+            self.white_final_q_values.append(max(self.white_ai.q_values))
+        else:
+            self.white_final_q_values.append(0)
+        
+        # Clear move-by-move values
+        self.black_ai.q_values = []
+        self.white_ai.q_values = []

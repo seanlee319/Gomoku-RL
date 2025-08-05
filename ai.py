@@ -8,7 +8,7 @@ class QLearningAI:
         self.q_table = defaultdict(float)
         self.learning_rate = 0.1
         self.discount_factor = 0.9
-        self.exploration_rate = 0.3
+        self.exploration_rate = 0.45
         self.exploration_decay = 0.9995
         self.last_state = None
         self.last_action = None
@@ -39,22 +39,21 @@ class QLearningAI:
         if random.random() < self.exploration_rate:
             return random.choice(available_moves)
         
+        q_values = []
         best_move = None
         max_q_value = -float('inf')
-        total_q = 0
-        count = 0
         
         for move in available_moves:
             action_key = str(move)
             q_value = self.q_table.get((state_key, action_key), 0.0)
-            total_q += q_value
-            count += 1
+            q_values.append(q_value)
             if q_value > max_q_value:
                 max_q_value = q_value
                 best_move = move
         
-        if count > 0:
-            self.q_values.append(total_q / count)
+        # Track the maximum Q-value for the current state
+        if q_values:
+            self.q_values.append(max_q_value)
         
         return best_move if best_move is not None else random.choice(available_moves)
     
